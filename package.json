@@ -4,7 +4,7 @@
   "description": "updated version of rage for allgameserver",
   "main": " ",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha"
   },
   "repository": {
     "type": "git",
@@ -17,6 +17,10 @@
   },
   "homepage": "https://github.com/spencermathias/rage#readme",
   "dependencies": {
-    "allgameplugin": "^1.0.2"
+    "allgameplugin": "file:../allGamePlugin"
+  },
+  "devDependencies": {
+    "chai": "^5.1.0",
+    "mocha": "^10.4.0"
   }
 }

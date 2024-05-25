@@ -1,9 +1,9 @@
 //socket stuff
 //var Addresses=require('./IPconfiguration.js')
-var localAddress = Addresses.localAddress;
+var localAddress = window.location.href;
 
 
-var socket = io(Addresses.publicAddress); //try public address
+var socket = io(localAddress)//Addresses.publicAddress); //try public address
 
 var trylocal = 0;
 socket.on('connect_error',function(error){

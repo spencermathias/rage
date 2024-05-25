@@ -5,6 +5,10 @@ app.use("./htmlRage")
 var roundNumber = 0
 var nextToLeadRound = 0
 var AllClients={}
+var players=[]
+maxPlayers = 9;
+minPlayers = 2;
+currentRound = 0;
 var trump=undefined
 var options={
     cardInfo:{
@@ -28,7 +32,7 @@ function getDeck(options){
     deck = []
     i = 0
     options.numbers.forEach(number => {
-        options.colors.forEach(color => {
+        options.cardInfo.colors.forEach(color => {
             card = {id:i,cardNumber:number,cardColor:color,type:"numberCard"};
             deck.push(card);
             i++;
@@ -47,7 +51,7 @@ function getDeck(options){
     //shuffle
     n=5
     while(n){
-        let m = deck.length, i;
+        let m = deck.length;
         while(m){
             i = Math.floor(Math.random() * m--);
             [deck[m],deck[i]]=[deck[i],deck[m]]
@@ -59,10 +63,13 @@ function getDeck(options){
 
 
 
-const colors= {
+const GameColors = {
     Spectator:"#444444",
     Server:"#ffff00",
+    Ready:"#00ff00",
     NotReady:"#ff0000",
+    NotYourTurn:'#0000FF',
+    GameError:"#FF0000",
 }
 const GameModes = {
     LOBBY : 0,
@@ -78,29 +85,31 @@ io.sockets.on('connection',function(socket){
     
     socket.userData = DefaultUserData();
     if(GameStatus === GameModes.LOBBY){
-        socket.color = Colors.NotReady
+        socket.userData.color =GameColors.NotReady
+        players.push(socket.userData)
     }else{
         WaitingRoom.push(Socket.id)
-        socket.color = colors.Spectator
+        socket.userData.color = GameColors.Spectator
         UpdateAllClients()
     }
 
-    comms.message(socket,'connection established',colors.Server)
+    comms.message(socket,'connection established',GameColors.Server)
 
     console.log("Socket.io Connection with client " + socket.id +" established");
 
     socket.on("disconnect",function() {
-		comms.message( io.sockets, "" + socket.userData.userName + " has left.", Color.Server);
-		comms.message( io.sockets, "Type 'kick' to kick disconnected players", Color.Server);
+		comms.message( io.sockets, "" + socket.userData.userName + " has left.", GameColors.Server);
+		comms.message( io.sockets, "Type 'kick' to kick disconnected players", GameColors.Server);
         console.log("disconnected: " + socket.userData.userName + ": " + socket.id);
     });
-
+/*
     socket.on('oldId', function(id){
 		console.log("oldID:", id);
-        if(players[id] != undefined){
-            console.log("found old player!", players[id].userData.username, socket.userData.userName);
-            socket.userData = players[id].userData;
-            players[id] = socket;
+        let oldPlayer = players.findIndex((player)=>{id == player.ID})
+        if(oldPlayer != -1){
+            console.log("found old player!", players[oldPlayer].userData.username, socket.userData.userName);
+            socket.userData = players[oldPlayer].userData;
+            players[oldPlayer] = socket.userData;
             socket.emit('cards', socket.userData.cards);
             updateTurnColor();
         } else {
@@ -108,49 +117,49 @@ io.sockets.on('connection',function(socket){
         }
 		
 	});
-
+*/
     socket.on("userName", function(userName) {
         socket.userData.userName = userName;
         //socket.userData.ready = false;
-        console.log(__line,"added new user: " + socket.userData.userName);
-		message(io.sockets, "" + socket.userData.userName + " has joined!", serverColor);
+        console.log("added new user: " + socket.userData.userName);
+		comms.message(io.sockets, "" + socket.userData.userName + " has joined!", GameColors.Server);
         updateUsers();
     });
 
     socket.on("ready", function(ready) {
-        if (gameStatus === GameModes.LOBBY){
-            socket.userData.ready = ready.ready;
+        if (GameStatus === GameModes.LOBBY){
+            socket.userData.ready = ready;
 			if (socket.userData.ready === true) {
-				socket.userData.statusColor = readyColor;
-				updateBoard(socket, readyTitleColor , false);
+				socket.userData.statusColor = GameColors.Ready;
+				updateUsers(socket, GameColors.Ready , false);
 			} else {
-				socket.userData.statusColor = notReadyColor;
-				updateBoard(socket, notReadyTitleColor , false);
+				socket.userData.statusColor = GameColors.notReady;
+				updateUsers(socket, GameColors.Ready , false);
 			}
             checkStart();
-			console.log(__line,"" + socket.userData.userName + " is ready: " + ready.ready);
+			console.log("" + socket.userData.userName + " is ready: " + ready);
             updateUsers();
         }
     });
     socket.on('receiveBid',function(bidAmount){
-        if(gameStatus === GameModes.BID){
+        if(GameStatus === GameModes.BID){
             socket.userData.bid = bidAmount;
-            player.userData.statusColor = readyColor;
+            player.userData.statusColor = GameColors.Ready;
             console.log(socket.userData.userName+'bid'+bidAmount);
             updateUsers();
             if(players.every((player)=>player.userData.bid>-1)){
                 console.log('all bids in');
                 io.sockets.emit('allBidsIn');
                 let bidTotal = players.reduce((sum,player)=>player.userData.bid+sum,0);
-                comms.message(io.sockets,bidTotal + " bid on " + currentRound, gameColor);
-                gameStatus = GameModes.PLAY;
+                comms.message(io.sockets,bidTotal + " bid on " + currentRound, GameColors.Server);
+                GameStatus = GameModes.PLAY;
                 tallyScoreFromHand(); //show initial score
                 startTrick();
             }
         }
     });
     socket.on('cardSelected',function(card){
-        if(gameStatus === GameModes.PLAY){
+        if(GameStatus === GameModes.PLAY){
             if(players[currentTurn].id == socket.id){
                 if(socket.userData.cards.some((CardInHand)=> card == CardInHand)){
                     //check to see they must play the color lead 
@@ -160,7 +169,7 @@ io.sockets.on('connection',function(socket){
                             if(validCards.some((CardInHand)=> card == CardInHand)){
                                 playAndAdvance(socket,card)
                             }else{
-                                comms.message(socket,"you must choose the card that matches the color lead",color.GameError)
+                                comms.message(socket,"you must choose the card that matches the color lead",GameColors.GameError)
                             }
                         }else{
                             playAndAdvance(socket,card)
@@ -170,13 +179,13 @@ io.sockets.on('connection',function(socket){
                         playAndAdvance(socket,card)
                     }
                 }else{
-                    comms.message(socket,"card not in your hand",Colors.GameError)
+                    comms.message(socket,"card not in your hand",GameColors.GameError)
                 }
             }else{
-                comms.message(socket,"not your turn",Colors)
+                comms.message(socket,"not your turn",GameColors.GameError)
             }
         }else{
-            comms.message(socket,"wrong mode to play cards",color.GameError)
+            comms.message(socket,"wrong mode to play cards",GameColors.GameError)
         }
     })
 })
@@ -185,46 +194,46 @@ function updateUsers() {
     console.log('{rage}',"--------------Sending New User List--------------");
     userList = players.map((player)=>({
         id: player.ID,
-        userName: player.userData.userName,
-        numberOfCards: player.userData.length,
-        color: player.userData.statusColor,
-        cardSelected: player.userData.cardSelected,
-        bid: player.userData.bid,
-        handsWon: player.userData.handsWon.length,
-        cardsLeft: client.player.userData.length,
-        score: client.score + player.userData.handScore
+        userName: player.userName,
+        numberOfCards: player.cards.length,
+        color: player.statusColor,
+        cardSelected: player.cardSelected,
+        bid: player.bid,
+        handsWon: player.handsWon,
+        score: 0
     }));
-    socket.io.emit("userList", userList);
+    io.sockets.emit("userList", userList);
 }
 
 
 function checkStart() {	
-    if( gameStatus === GameModes.LOBBY) {
-        var readyCount = AllClients.filter(client=>client.ready).length
+    if( GameStatus === GameModes.LOBBY) {
+        var readyCount = players.filter(client=>client.ready).length
         if(readyCount <= maxPlayers){
-            if(readyCount == allClients.length && readyCount >= minPlayers) {
+            if(readyCount == players.length && readyCount >= minPlayers) {
                 gameStart();
             }
         }else{
-            comms.message(io.sockets,'you must increase the number of cards in the deck or reduce the number of players before the game can start',colors.GameError)
+            comms.message(io.sockets,'you must increase the number of cards in the deck or reduce the number of players before the game can start',GameColors.GameError)
         }
     }
 }
 
 function gameStart(){
     console.log("game start");
-    comms.message(io.sockets,"THE GAME HAS STARTED",colors.GameColor)
+    comms.message(io.sockets,"THE GAME HAS STARTED",GameColors.Server)
+    /*
     //reset players
     players = []
-    
     AllClients.array.forEach(function(client){
         if(client.userData.ready){
-            client.userData.statusColor = colors.NotYourTurn;
+            client.userData.statusColor = GameColors.NotYourTurn;
             players.push(client)
         }else{
-            client.userData.statusColor = colors.Spectator
+            client.userData.statusColor = GameColors.Spectator
         }
     });
+    */
     nextToLeadRound = Math.floor(Math.random()*players.length); //random starting person
     //TODO:change screen to game from lobby
     startRound()
@@ -235,6 +244,7 @@ function startRound(){
     // create deck
     Deck = getDeck(options.CardInfo)
     //add players that are waiting
+    /* TODO:add players that are waiting
     let newPlayers = allClients.filter((client)=>{WaitingRoom.some((ID)=>{ID == client.id})});
     newPlayers = newPlayers.filter((player)=>{player.userData.ready});
     let addedPlayerIDs = newPlayers.map((player)=>{player.id})
@@ -242,9 +252,10 @@ function startRound(){
     //keep ID that is different from every added player id in list
     WaitingRoom = WaitingRoom.filter((ID)=>addedPlayerIDs.every((addedID)=>addedID!=ID))
     currentRound = options.numberInHand[roundNumber]
+    */
     players.map(p=>p.userData).forEach(player => {
         player.cards = Deck.pop(min(currentRound,1))
-        player.statusColor = color.NotReadyColor
+        player.statusColor = color.GameColors.NotReady
         player.cardSelected = undefined;
         player.bid = -1;
         player.handsWon = 0;
@@ -255,7 +266,7 @@ function startRound(){
     players[currentTurn].emit('playerLeadsRound', true)
     cardTypes.change()
     
-    gameStatus = GameModes.BID
+    GameStatus = GameModes.BID
     sendCards();
     updateUsers();
     io.sockets.emit("requestBids")
@@ -269,7 +280,8 @@ function DefaultUserData(){
         score:0,
         bid:0,
         ready:false,
-        color:NotReadyColor
+        color:GameColors.NotReady,
+        handsWon:0
     }
 }
 
@@ -283,8 +295,8 @@ function startTrick(){
 }
 
 function updateTurnColor(){
-    if(players.map((player) => player.UserData.statusColor).some((color)=>color != NotYourTurn)){
-        players.forEach((player)=>player.userData.statusColor=color.NotReadyColor)
+    if(players.map((player) => player.UserData.statusColor).some((color)=>color != colors.NotReady)){
+        players.forEach((player)=>player.userData.statusColor=color.GameColors.NotReady)
         players[currentTurn].UserData.statusColor = color.YourTurn
     }
 }
@@ -361,8 +373,8 @@ function getTrickWinner(cardsOnTable){
 function EndGame(){
     console.log('game ended')
     //TODO: change screen from game mode back to lobby
-    comms.message(io.sockets,"THE GAME HAS ENDED",colors.gameColor)
-    comms.message(io.sockets,"Scores",colors.gameColor)
+    comms.message(io.sockets,"THE GAME HAS ENDED",GameColors.Server)
+    comms.message(io.sockets,"Scores",GameColors.Server)
     
     players.sort((a,b)=>a.userData.score-b.userData.score)
     players.forEach((player)=>comms.message(io.sockets,player.userData.username + ': ' + player.userData.score))
