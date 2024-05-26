@@ -1,11 +1,13 @@
+uuid = 0
 module.exports = {
     CalculateMaximumPlayers:function(cardDescriptions){
         let maxPlayers = 3;
         return maxPlayers;
     },
-    addPlayers:function(playerID,currentState){
+    addPlayers:function(playerID){
         let player={
             id:playerID,
+            userName:"needNewName"+uuid,
             score:0,
             bid:undefined,
             state:'NotReady',

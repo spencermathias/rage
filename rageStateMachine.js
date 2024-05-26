@@ -11,8 +11,8 @@ const promiseStuff={
 
 
 // global variables
-var currentState = {name:"none"};
-var players = [];
+//var currentState = {name:"none"};
+//var players = [];
 var WaitingPlayers = []
 const GameParameters = {
     cardDescriptions:{},
@@ -38,9 +38,9 @@ const AvailableStates={
             }
         },
         resolveAllReady:()=>{},
-        checkToChangeState:function(){
-            numberOfReadyPlayers = players.filter((player)= player.ready).length
-            if(players.length > this.MinimumPlayers && (players.length == numberOfReadyPlayers || players.length >= GameParameters.MaximumPlayers )){
+        checkToChangeState:function(players){
+            numberOfReadyPlayers = players.filter((player)=>player.state == "ready").length
+            if(players.length >= this.MinimumPlayers && (players.length == numberOfReadyPlayers || players.length >= GameParameters.MaximumPlayers )){
                 this.resolveAllReady(0)
             }
         }
@@ -48,7 +48,7 @@ const AvailableStates={
     DEAL:{
         name:'DEAL',
         deck:[],
-        initialize:()=>{
+        initialize:(players)=>{
             if(CurrentRound<GameParameters.RoundTrickTotals.length){
                 this.deck = rageFunctions.createDeck(GameParameters.cardDescriptions);
                 players.push(...rageFunctions.addWaitingPlayers(WaitingPlayers,GameParameters.MaximumPlayers));
@@ -62,7 +62,7 @@ const AvailableStates={
     },
     BID:{
         name:'BID',
-        initialize:()=>{
+        initialize:(players)=>{
             players.map((player)=>(Object.assign(player,{bid:undefined})));
             DealerIndex = rageFunctions.UpdateDealerIndex(DealerIndex,players.length);
         },
@@ -80,37 +80,38 @@ const AvailableStates={
     PLAY:{
         name:'PLAY',
         CurrentTurn:0,
-        tableCards:new Array(players.length),
+        tableCards:[],
         ledSuit:undefined,
-        numberOfTricksWon: new Array(players.length).fill(0),
-        initialize:function(dealer){
+        numberOfTricksWon:[],
+        initialize:function(dealer,players){
             this.CurrentTurn = rageFunctions.updateCurrentTurn(this.tableCards,dealer) 
+            this.tableCards = new Array(players.length)
+            this.numberOfTricksWon = new Array(players.length).fill(0)
         },
-        selectedCard:function(card){
-            let player = players[this.CurrentTurn]
-            let PlayInfo = rageFunctions.PlayedCard(card,player,this.ledSuit)
-            player.cards = PlayInfo.cards;
-            this.tableCards[this.CurrentTurn] = PlayInfo.tableCard;
-            this.ledSuit = PlayInfo.LedSuit;
-            if(this.tableCards.some((card)=>card==undefined)){
-                if(PlayInfo.tableCard != undefined){
-                    this.CurrentTurn = rageFunctions.updateCurrentTurn(this.tableCards,this.CurrentTurn);
-                }
-            }else{
-                let scoreInfo = rageFunctions.TallyScoreFromHand(players,this.tableCards,this.ledSuit,trumpSuit,this.numberOfTricksWon,GameParameters.ScoringVariables);
-                players.map((scoringPlayer, i)=>(Object.assign(scoringPlayer,{score:scoreInfo.scoresArray[i]})));
-                this.numberOfTricksWon = scoreInfo.updatedNumberOfTricksWon;
-                if(player.cards.length != 0){
-                    this.CurrentTurn = scoreInfo.winnerIndex-1;
-                }else{
-                    eventEmitter.emit('changeStateTo','DEAL');
-                }
-            }
-        }
+        // selectedCard:function(card,player){
+        //     let PlayInfo = rageFunctions.PlayedCard(card,player,this.ledSuit)
+        //     player.cards = PlayInfo.cards;
+        //     this.tableCards[this.CurrentTurn] = PlayInfo.tableCard;
+        //     this.ledSuit = PlayInfo.LedSuit;
+        //     if(this.tableCards.some((card)=>card==undefined)){
+        //         if(PlayInfo.tableCard != undefined){
+        //             this.CurrentTurn = rageFunctions.updateCurrentTurn(this.tableCards,this.CurrentTurn);
+        //         }
+        //     }else{
+        //         let scoreInfo = rageFunctions.TallyScoreFromHand(players,this.tableCards,this.ledSuit,trumpSuit,this.numberOfTricksWon,GameParameters.ScoringVariables);
+        //         players.map((scoringPlayer, i)=>(Object.assign(scoringPlayer,{score:scoreInfo.scoresArray[i]})));
+        //         this.numberOfTricksWon = scoreInfo.updatedNumberOfTricksWon;
+        //         if(player.cards.length != 0){
+        //             this.CurrentTurn = scoreInfo.winnerIndex-1;
+        //         }else{
+        //             eventEmitter.emit('changeStateTo','DEAL');
+        //         }
+        //     }
+        //}
     },
     END:{
         name:'END',
-        initialize:()=>{
+        initialize:(players)=>{
             let scoreTable = rageFunctions.ShowScores(players)
             console.table(scoreTable)
         }
@@ -143,8 +144,6 @@ var t = 0
 
 if(process.argv[2] === "test" || process.env.NODE_ENV === "test"){
     console.log(' this is a test')
-    exports.players = players
-    exports.WaitingPlayers = WaitingPlayers
     exports.GameParameters = GameParameters
 }
 
@@ -159,6 +158,15 @@ class machine{
         this.playerBounds = {}
         this.DealerIndex = 0
         this.done = false
+        this.players = []
+        this.WaitingPlayers = []
+    }
+    addPlayer(name) {
+        if(currentState.name == 'LOBBY'){
+            this.players.push(rageFunctions.addPlayers(name))
+        }else{
+            this.WaitingPlayers.push(rageFunctions.addPlayers(name))
+        }
     }
     async main(){
         this.currentState = AvailableStates.LOBBY;
@@ -168,11 +176,12 @@ class machine{
         });
         const response = await this.allReady
         this.DealerIndex = Math.floor(Math.random()*numberOfReadyPlayers);
+        const i=0
         //start loop
         while(i<GameParameters.RoundTrickTotals.length || this.done == true){
             //do deal state
             this.currentState = AvailableStates.DEAL
-            this.currentState.initialize()
+            this.currentState.initialize(this.players)
             //bid state
             this.currentState = AvailableStates.BID
             this.allBid = new Promise((resolve, reject) => {
@@ -182,29 +191,34 @@ class machine{
             console.log(bidDone);
             //play state
             this.currentState = AvailableStates.PLAY
-            this.currentState.initialize()
+            this.currentState.initialize(this.players)
             this.roundDone = new Promise((resolve,reject)=>{
                 this.currentState.resolveAllPlayed = resolve;
             })
             const playDone = await this.roundDone
+            i+=1
         }
         this.currentState = AvailableStates.END
-        this.currentState.initialize()
-        setTimeout(main(),5000)
-    }
-    async RoundPlay(LeadPlayerIndex){
-        let tableCards = Array(players.length)
-        let currentTurn = LeadPlayerIndex
-        for(tableCards.some((card)=>card==undefined)){
-            await tableCards[currentTurn] = this.getPlayerCard(currentTurn)
-            currentTurn = rageFunctions.updateCurrentTurn(tableCards,currentTurn)
+        this.currentState.initialize(players)
+        if(this.close = false){
+            setTimeout(main(),5000)
+        }else{
+            setTimeout(console.log("game loop is broken and thread will finish"),500)
         }
-        return tableCards
     }
+//    async RoundPlay(LeadPlayerIndex){
+//        let tableCards = Array(players.length)
+//        let currentTurn = LeadPlayerIndex
+//        for(tableCards.some((card)=>card==undefined)){
+//            await tableCards[currentTurn] = this.getPlayerCard(currentTurn)
+//            currentTurn = rageFunctions.updateCurrentTurn(tableCards,currentTurn)
+//        }
+//        return tableCards
+//    }
 
-    async getPlayerCard(currentTurn){
-        return Promise.resolve()
-    }
+//    async getPlayerCard(currentTurn){
+//        return Promise.resolve()
+//    }
 }
 
 
