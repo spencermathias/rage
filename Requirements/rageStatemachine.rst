@@ -20,7 +20,7 @@ the following shall be the only global variables used in this state machine
 
 1.1.1 CurrentState
 
-current state will be an enumerated value that is one of the following
+current state will be an object with the name field that has a value that is one of the following
 
 * LOBBY
 * DEAL
@@ -103,11 +103,10 @@ the lobby state shall send a response to update the UI with the following
 ----------------------------
 2.6 transition to DEAL State
 ----------------------------
-the lobby state shall set the CurrentState to DEAL state when all the following are True
+the lobby state shall set the CurrentState to DEAL state when there are more players than minimumPlayers and any of the following are True
 
 * all the players are in a ready state
-* there are more players than minimumPlayers
-* there are more players than gameParameters.MaxPlayerCount
+* there are more players in the ready state than gameParameters.MaxPlayerCount
 
 3 Deal state
 -------------

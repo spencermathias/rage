@@ -1,9 +1,6 @@
 const events = require('events');
 const rageFunctions = require('./rageFunctions');
-const { Console } = require('console');
-const { randomInt } = require('crypto');
-const { rejects } = require('assert');
-const eventEmitter = new events.EventEmitter();
+
 
 const promiseStuff={
     allReady:()=>{}
@@ -20,6 +17,7 @@ const GameParameters = {
     RoundTrickTotals:[10,9,8,7,6,5,4,3,2,1,0],
     MaximumPlayers:9
 };
+
 var CurrentRound = 0;
 var DealerIndex = 0;
 
@@ -38,12 +36,16 @@ const AvailableStates={
             }
         },
         resolveAllReady:()=>{},
-        checkToChangeState:function(players){
-            numberOfReadyPlayers = players.filter((player)=>player.state == "ready").length
-            if(players.length >= this.MinimumPlayers && (players.length == numberOfReadyPlayers || players.length >= GameParameters.MaximumPlayers )){
-                this.resolveAllReady(0)
+        updatePlayerReady:function(players,playerID,isReady){
+            let playerIndex = players.findIndex((player)=>player.id == playerID)
+            if(playerIndex!=-1){
+                players[playerIndex].state = isReady?"Ready":"NotReady";
             }
-        }
+            let numberOfReadyPlayers = players.filter((player)=>player.state == "Ready").length
+            if(players.length >= this.MinimumPlayers && (players.length == numberOfReadyPlayers || numberOfReadyPlayers == GameParameters.MaximumPlayers )){
+                this.resolveAllReady(numberOfReadyPlayers)
+            }
+        },
     },
     DEAL:{
         name:'DEAL',
@@ -67,13 +69,13 @@ const AvailableStates={
             DealerIndex = rageFunctions.UpdateDealerIndex(DealerIndex,players.length);
         },
         resolveAllBid:()=>{},
-        updateBid:(playerID,bidAmount)=>{
+        updateBid:(players,playerID,bidAmount)=>{
             let playerIndex = players.findIndex((player)=>player.id == playerID)
             if(playerIndex!=-1){
                 players[playerIndex].bid = bidAmount;
             }
             if(players.every((player)=>player.bid != undefined)){
-                resolveAllBid(players.reduce((total,player)=>total+player.bid));
+                this.resolveAllBid(players.reduce((total,player)=>total+player.bid));
             }
         }
     },
@@ -134,8 +136,6 @@ var changeState = function (value,data) {
 }
 
 
-//Assign the event handler to an event:
-eventEmitter.on('changeStateTo', changeState);
 
 //set the State to Lobby
 eventEmitter.emit('changeStateTo','LOBBY');
@@ -160,6 +160,10 @@ class machine{
         this.done = false
         this.players = []
         this.WaitingPlayers = []
+        this.roundVariables = {}
+        this.eventEmitter = new events.EventEmitter();
+        //Assign the event handler to an event:
+        this.eventEmitter.on('changeStateTo', changeState);
     }
     addPlayer(name) {
         if(currentState.name == 'LOBBY'){
@@ -168,13 +172,20 @@ class machine{
             this.WaitingPlayers.push(rageFunctions.addPlayers(name))
         }
     }
+    sortPlayers(players){
+        let ReadyPlayers = players.filter((player)=>player.state=="Ready")
+        let NotReadyPlayers = players.filter((player)=>player.state=="NotReady")
+        this.players = ReadyPlayers;
+        this.WaitingPlayers = NotReadyPlayers;
+    }
     async main(){
         this.currentState = AvailableStates.LOBBY;
         this.playerBounds = this.currentState.initialize();
         this.allReady = new Promise((resolve, reject) => {
             this.currentState.resolveAllReady=resolve;
         });
-        const response = await this.allReady
+        const numberOfReadyPlayers = await this.allReady
+        this.sortPlayers(this.players)
         this.DealerIndex = Math.floor(Math.random()*numberOfReadyPlayers);
         const i=0
         //start loop
@@ -184,6 +195,7 @@ class machine{
             this.currentState.initialize(this.players)
             //bid state
             this.currentState = AvailableStates.BID
+            this.currentState.initialize(this.players)
             this.allBid = new Promise((resolve, reject) => {
                 this.currentState.resolveAllBid = resolve;
             })
@@ -206,9 +218,21 @@ class machine{
             setTimeout(console.log("game loop is broken and thread will finish"),500)
         }
     }
+    async TrickPlay(LeadPlayerIndex){
+        //this.roundVariables.tableCards = new Array(this.players.length)
+        let tableCards = new Array(this.players.length)
+        let currentTurn = LeadPlayerIndex
+        let playResults = tableCards.map((result)=>{
+            let resolve
+            let promise = new Promise((res,rej)=>{
+                resolve = res
+            })
+            return {p:promise,r:resolve}
+        })
+        
+    }
 //    async RoundPlay(LeadPlayerIndex){
 //        let tableCards = Array(players.length)
-//        let currentTurn = LeadPlayerIndex
 //        for(tableCards.some((card)=>card==undefined)){
 //            await tableCards[currentTurn] = this.getPlayerCard(currentTurn)
 //            currentTurn = rageFunctions.updateCurrentTurn(tableCards,currentTurn)
@@ -220,7 +244,6 @@ class machine{
 //        return Promise.resolve()
 //    }
 }
-
 
 
 exports.currentState = this.currentState

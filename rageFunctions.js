@@ -30,8 +30,24 @@ module.exports = {
         let NextDealerIndex = 0
         return NextDealerIndex
     },
-    PlayedCard:function(desiredCard,cardsArray,ledSuit){
-        return {cards:cardsArray,tableCard:desiredCard,LedSuit:ledSuit}
+    PlayedCard:function(desiredCard,playerCardArray,ledSuit,resolve){
+        if(ledSuit != undefined){
+            resolve({
+                cards:playerCardArray.filter((card)=> card != desiredCard),
+                tableCard:desiredCard,
+                LedSuit:desiredCard.suit
+            })
+        }else if(ledSuit == desiredCard.suit){
+            resolve({
+                cards:playerCardArray.filter((card)=> card != desiredCard),
+                tableCard:desiredCard
+            })
+        }else if(playerCardArray.every((card)=> card.suit != ledSuit)){
+            resolve({
+                cards:playerCardArray.filter((card)=> card != desiredCard),
+                tableCard:desiredCard
+            })
+        }
     },
     updateCurrentTurn:function(cardsOnTable,currentTurn){
         let nextTurn = currentTurn +1

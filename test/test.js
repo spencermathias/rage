@@ -27,47 +27,70 @@ describe('rageStateMachine Happy path', async function () {
             assert.equal(rageStateMachine.players[0].state,"NotReady")
         })
         it('stay in lobby with only one player that is ready',function(){
-            rageStateMachine.players[0].state = "ready";
-            rageStateMachine.currentState.checkToChangeState(rageStateMachine.players)
+            rageStateMachine.currentState.updatePlayerReady(rageStateMachine.players,'MyName',true);
             assert.equal(rageStateMachine.players.length,1)
             assert.equal(rageStateMachine.currentState.name,'LOBBY')
-            assert.equal(rageStateMachine.players[0].state,"ready")
+            assert.equal(rageStateMachine.players[0].state,"Ready")
         })
         it('stay in lobby when there are 2 players',function(){
             rageStateMachine.addPlayer("bob")
-            rageStateMachine.currentState.checkToChangeState(rageStateMachine.players)
             assert.equal(rageStateMachine.players.length,2)
             assert.equal(rageStateMachine.currentState.name,'LOBBY')
-            assert.equal(rageStateMachine.players[0].state,"ready") 
+            assert.equal(rageStateMachine.players[0].state,"Ready") 
             assert.equal(rageStateMachine.players[1].state,"NotReady") 
         })
-        it('stay in lobby with only one player that is ready',function(){
-            rageStateMachine.players[1].state = "ready";
-            rageStateMachine.currentState.checkToChangeState(rageStateMachine.players)
-            assert.equal(rageStateMachine.players.length,2)
+        it('checks for too many people',()=>{
+            rageStateMachine.currentState.updatePlayerReady(rageStateMachine.players,'MyName',false);
+            for(let i=0;i<8;i++){
+                rageStateMachine.addPlayer(''+i)
+                rageStateMachine.currentState.updatePlayerReady(rageStateMachine.players,''+i,true);
+            }
+            console.table(rageStateMachine.players)
             assert.equal(rageStateMachine.currentState.name,'LOBBY')
-            assert.equal(rageStateMachine.players[1].state,"ready")
+        })
+        it('should start when maximum players are ready',function(){
+            rageStateMachine.currentState.updatePlayerReady(rageStateMachine.players,'bob',true);
+            assert.equal(rageStateMachine.currentState.name,'LOBBY')
+            assert.equal(rageStateMachine.players[1].state,"Ready")
         })
     });
+    let lobbyDone = await rageStateMachine.allReady
+    console.log(lobbyDone)
     describe('deal State initializes correctly',function(){
         it('should now have the name DEAL',function(){
-            assert.equal(rageStateMachine.currentState.name,'BID')
+            assert.equal(rageStateMachine.currentState.name,'DEAL')
+            assert(rageStateMachine.currentState.deck.length>0,"there is no deck")
         })
         it('should have hands for all the players',async function(){
-            console.log(rageStateMachine.players)
+            assert.equal(rageStateMachine.players.length,rageStateMachineClass.GameParameters.MaximumPlayers)
             assert(rageStateMachine.players[0].cards.length > 0,"player 0 does not have cards")
-            assert(rageStateMachine.players[1].cards.length > 0,"player 0 does not have cards")
-            let result = await rageStateMachine.allReady
+            //assert(rageStateMachine.players[rageStateMachineClass.GameParameters.MaximumPlayers-1].cards.length > 0,"player "+(rageStateMachineClass.GameParameters.MaximumPlayers-1)+ " does not have cards")
         })
     })
-    let lobbyDone = await rageStateMachine.allReady
     describe("test the bid phase",async function(){
+        //todo reset machine
         rageStateMachine.done = true
         rageStateMachine.close = true
-        rageStateMachine.players[0].bid=10
-        rageStateMachine.players[1].bid=1
-        assert.equal(rageStateMachineClass.currentState.name,"BID")
-        rageStateMachineClass.currentState.resolveAllBid(10)
+        await rageStateMachine.currentState.initialize(rageStateMachine.players)
+        it("should not move to next state",function(){
+            assert.equal(rageStateMachineClass.currentState.name,"DEAL")
+            rageStateMachine.currentState.updateBid(rageStateMachine.players,"bob",5)
+            assert.equal(rageStateMachine.players[0].bid,5)
+        })
+        //remove players
+        rageStateMachine.players.pop()//7
+        rageStateMachine.players.pop()//6
+        rageStateMachine.players.pop()//5
+        rageStateMachine.players.pop()//4
+        rageStateMachine.players.pop()//3
+        rageStateMachine.players.pop()//2
+        rageStateMachine.players.pop()//1
+        it("should move to next state when both have bid",function(){
+            rageStateMachine.currentState.updateBid(rageStateMachine.players,"0",6)
+            assert.equal(rageStateMachineClass.currentState.name,"DEAL")
+            assert.equal(rageStateMachine.players[0].bid,5)
+        })
+        //rageStateMachineClass.currentState.resolveAllBid(10)
     })
     let ready = await rageStateMachine.allBid
     describe("play state",function(){
