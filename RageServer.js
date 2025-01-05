@@ -353,7 +353,6 @@ function getNextIndex(arr, lastPlayerIndex) {
 
 function getTrickWinner(cardsOnTable){
     //get player who wins trick
-    let trickWinner = undefined
     if(trump != undefined){
         const trumpOnTable = cardsOnTable
             .map((card,playerIndex) => ({card,playerIndex}))

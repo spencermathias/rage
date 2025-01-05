@@ -12,7 +12,18 @@ const promiseStuff={
 //var players = [];
 var WaitingPlayers = []
 const GameParameters = {
-    cardDescriptions:{},
+    cardDescriptions:{
+        NumberCardDescription:{
+            maxValue:15,
+            colors:['red','green','blue','orange','purple','yellow']
+        },
+        Word:[
+            {Name:"out",quantity:6},
+            {Name:"change",quantity:6},
+            {Name:"bonus",quantity:2,ScoreChange:5},
+            {Name:"mad",quantity:2,ScoreChange:-5}//,
+            //{Name:"wild",quantity:2}
+        ]},
     ScoringVariables:{},
     RoundTrickTotals:[10,9,8,7,6,5,4,3,2,1,0],
     MaximumPlayers:9
@@ -27,9 +38,9 @@ const AvailableStates={
         name:'LOBBY',
         MinimumPlayers:2,
         MaximumPlayers:9,
-        initialize:()=>{
+        initialize:function(){
             CurrentRound = 0;
-            this.MaximumPlayers = rageFunctions.CalculateMaximumPlayers()
+            this.MaximumPlayers = rageFunctions.CalculateMaximumPlayers(GameParameters.cardDescriptions,GameParameters.RoundTrickTotals,0)
             return {
                 MaximumPlayers:this.MaximumPlayers,
                 MinimumPlayers:this.MinimumPlayers
@@ -38,6 +49,9 @@ const AvailableStates={
         resolveAllReady:()=>{},
         updatePlayerReady:function(players,playerID,isReady){
             let playerIndex = players.findIndex((player)=>player.id == playerID)
+            if(isReady === undefined){
+                return players[playerIndex].state 
+            }
             if(playerIndex!=-1){
                 players[playerIndex].state = isReady?"Ready":"NotReady";
             }
@@ -54,8 +68,10 @@ const AvailableStates={
             if(CurrentRound<GameParameters.RoundTrickTotals.length){
                 this.deck = rageFunctions.createDeck(GameParameters.cardDescriptions);
                 players.push(...rageFunctions.addWaitingPlayers(WaitingPlayers,GameParameters.MaximumPlayers));
-                let dealtHands = rageFunctions.dealCards(this.deck,players.length)
-                players.map((player,i)=>{player.cards.splice(0,Infinity,...dealtHands[i])})
+                let dealtHands = rageFunctions.dealCards(this.deck,players.length,10)
+                players.map((player,i)=>{
+                    player.cards.splice(0,Infinity,...dealtHands[i])
+                })
                 CurrentRound++
             }else{
                 eventEmitter.emit('changeStateTo','END');
@@ -87,14 +103,23 @@ const AvailableStates={
         numberOfTricksWon:[],
         initialize:function(dealer,players){
             this.CurrentTurn = rageFunctions.updateCurrentTurn(this.tableCards,dealer) 
-            this.tableCards = new Array(players.length)
+            this.tableCards = new Array(players.length).fill().map((value,index)=>{(result)=>{
+                return new Promise((resolve, reject) => {
+                    this.ledSuit = result.ledSuit
+                    resolve(result.tableCard)
+                })
+            }},this)
             this.numberOfTricksWon = new Array(players.length).fill(0)
         },
+        cardPlayed:function(ledSuit){
+            currentTurn = rageFunctions.updateCurrentTurn(this.tableCards,this.CurrentTurn);
+
+        }
         // selectedCard:function(card,player){
         //     let PlayInfo = rageFunctions.PlayedCard(card,player,this.ledSuit)
         //     player.cards = PlayInfo.cards;
         //     this.tableCards[this.CurrentTurn] = PlayInfo.tableCard;
-        //     this.ledSuit = PlayInfo.LedSuit;
+        //     this.ledSuit = PlayInfo.ledSuit;
         //     if(this.tableCards.some((card)=>card==undefined)){
         //         if(PlayInfo.tableCard != undefined){
         //             this.CurrentTurn = rageFunctions.updateCurrentTurn(this.tableCards,this.CurrentTurn);
@@ -138,8 +163,8 @@ var changeState = function (value,data) {
 
 
 //set the State to Lobby
-eventEmitter.emit('changeStateTo','LOBBY');
-var t = 0
+//eventEmitter.emit('changeStateTo','LOBBY');
+//var t = 0
 
 
 if(process.argv[2] === "test" || process.env.NODE_ENV === "test"){
@@ -166,11 +191,14 @@ class machine{
         this.eventEmitter.on('changeStateTo', changeState);
     }
     addPlayer(name) {
-        if(currentState.name == 'LOBBY'){
+        if(this.currentState.name == 'LOBBY'){
             this.players.push(rageFunctions.addPlayers(name))
         }else{
             this.WaitingPlayers.push(rageFunctions.addPlayers(name))
         }
+    }
+    getPlayerInfo(socketID) {
+        return this.players.filter((player)=>{player.id == socketID})
     }
     sortPlayers(players){
         let ReadyPlayers = players.filter((player)=>player.state=="Ready")

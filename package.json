@@ -17,10 +17,10 @@
   },
   "homepage": "https://github.com/spencermathias/rage#readme",
   "dependencies": {
-    "allgameplugin": "file:../allGamePlugin"
+    "allgameplugin": "file:../allGamePlugin",
+    "sinon": "^19.0.2"
   },
   "devDependencies": {
-    "chai": "^5.1.0",
     "mocha": "^10.4.0"
   }
 }

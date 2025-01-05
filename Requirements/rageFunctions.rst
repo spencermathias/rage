@@ -7,6 +7,8 @@
 the maximumPlayers function shall receive the following inputs
 
 * CardDescriptions
+* RoundTrickTotals
+* CurrentRound
 
 1.2 outputs
 ------------
@@ -14,8 +16,25 @@ the maximumPlayers function shall return the following outputs
 
 * MaxPlayers
   
-1.3 
---------------
+1.3 calculate usableCards
+------------------------------------
+the maximumPlayers function shall calculate the number of cards that
+ are not out or change. these cards require a new cards to be reveled 
+ when played. therefore should not count toward the total cards available
+ to be used in hands. 
+
+1.4  calculate MaxHandSize
+---------------------------
+the maximumPlayers function shall calculate MaxHandSize to be the 
+maximum of the values in the RoundTrickTotals array have an index greater
+than the current round.
+
+1.5  calculate MaxPlayers
+--------------------------
+the maximumPlayers function shall calculate the maxPlayers by the following equation
+
+maximumPlayers = truncate((usableCards-1)/maximumPlayers)
+
 
 
 ======================
@@ -54,8 +73,23 @@ the CreateDeck function shall return the following outputs
 
 * DeckArray
 
-2.3 
---------------
+2.3 create number cards
+------------------------
+the CreateDeck function shall create a card for each number between and including 0 
+and the CardDescriptions MaxNumber in each color
+
+2.4 create word cards
+----------------------
+the CreateDeck function shall create a the number of cards specified by the 
+quantity field each of the entries of the CardDescriptions that are not 
+related to numbers or colors
+
+2.5 word card properties 
+-------------------------
+word cards shall have the following
+
+* name: name of the card
+* the function of how the card will interact with the game
 
 ======================
 3 addWaitingPlayers 
@@ -72,7 +106,7 @@ the addWaitingPlayers function shall receive the following inputs
 ------------
 the addWaitingPlayers function shall return the following outputs
 
-* newPlayerArray
+* newPlayerArray:[]
   
 3.3 
 --------------
